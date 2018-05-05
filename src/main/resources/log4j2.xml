@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="OFF">
+    <Appenders>
+        <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout pattern="%highlight{[%-5level] [%d] %C{1.} - %msg%throwable{full}%n}" />
+        </Console>
+    </Appenders>
+    <Loggers>
+        <Logger name="com.knightowlgames.proxy-pal" level="TRACE" additivity="false">
+            <AppenderRef ref="Console" />
+        </Logger>
+        <Root level="ERROR">
+            <AppenderRef ref="Console" />
+        </Root>
+    </Loggers>
+</Configuration>
