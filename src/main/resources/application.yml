@@ -13,7 +13,7 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.H2Dialect
 server:
-  port: 8088
+  port: 8080
 management:
   endpoints:
     web:
