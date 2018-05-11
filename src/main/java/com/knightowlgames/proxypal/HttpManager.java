@@ -32,7 +32,7 @@ public final class HttpManager
 
                     client.setConnectTimeout(500, TimeUnit.MILLISECONDS);
                     client.setReadTimeout(1000, TimeUnit.MILLISECONDS);
-                    client.setWriteTimeout(30, TimeUnit.SECONDS);
+                    client.setWriteTimeout(10, TimeUnit.SECONDS);
                 }
             }
         }

@@ -7,7 +7,6 @@ import com.squareup.okhttp.Request;
 import com.squareup.okhttp.Response;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -16,6 +15,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 
+import javax.imageio.ImageIO;
+import java.awt.*;
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.net.SocketTimeoutException;
@@ -23,10 +25,8 @@ import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
+import java.util.List;
 import java.util.stream.Collectors;
 
 @Controller
@@ -84,7 +84,6 @@ public class ImageRetriever {
             })
         );
 
-        //TODO: Normalize paths for windows and unix
         return new ResponseEntity<>(setList.stream()
                 .map(s ->  s.replace(" ", "+"))
                 .collect(Collectors.joining("\n")), HttpStatus.OK);
@@ -189,6 +188,23 @@ public class ImageRetriever {
                 e.printStackTrace();
             }
         });
+
+        List<MagicCard> deckList = new ArrayList<>();
+        deckInfo.forEach((name, qty) -> {
+            MagicCard card = new MagicCard();
+            card.setName(name.substring(name.indexOf("gf/") + 3, name.indexOf("%2B%255B"))
+                    .replace("%2B%252F%252F%2B", "--")
+                    .replace("%2527", "'")
+                    .replace("%252C", ",")
+                    .replace("%253E", "")
+                    .replace("%253C", "")
+                    .replace("%2B", "+"));
+            card.setOwned(0);
+            card.setUsed(qty);
+            deckList.add(card);
+        });
+
+        imageStitcher(id.toString(), deckList, 3, 3);
         return new ResponseEntity<>(deckInfo.toString(),HttpStatus.OK);
     }
 
@@ -209,7 +225,7 @@ public class ImageRetriever {
                 .build();
         Response response = client.newCall(request).execute();
         Path path = Paths.get("images/" + deckName + "/");
-        //if directory exists?
+
         if (!Files.exists(path)) {
             try {
                 Files.createDirectories(path);
@@ -245,4 +261,100 @@ public class ImageRetriever {
         }
     }
 
+    private void imageStitcher(String deckname, List<MagicCard> cardSet, int imagesWide, int imagesTall) throws IOException
+    {
+        if(imagesWide < 1 || imagesTall < 1)
+        {
+            return;
+        }
+        File deckFolder = new File("images/" + deckname + "/deck/");
+        String[]entries = deckFolder.list();
+        if(entries != null) {
+            for (String entry : entries) {
+                File currentFile = new File(deckFolder.getPath(), entry);
+                currentFile.delete();
+            }
+        }
+        if (!Files.exists(deckFolder.toPath())) {
+            try {
+                Files.createDirectories(deckFolder.toPath());
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        BufferedImage compiledImage = new BufferedImage((imagesWide * scaledWidth) + (3 * (imagesWide -1)),
+                (imagesTall * scaledHeight) + (3 * (imagesTall - 1)),
+                BufferedImage.TYPE_INT_RGB);
+        int imgCount = 0;
+        int imgNumber = 0;
+        int page = 1;
+        while(cardSet.get(imgNumber).getOwned() >= cardSet.get(imgNumber).getUsed() && imgNumber < cardSet.size())
+        {
+            imgNumber ++;
+        }
+
+        while(imgCount < cardSet.size())
+        {
+            for (int i = 0; i < imagesTall; i++)
+            {
+                for (int j = 0; j < imagesWide; j++)
+                {
+
+                    try {
+                        System.out.println("images/" + deckname + "/" + cardSet.get(imgNumber).getName() + ".jpg");
+                        File image = new File("images/" + deckname + "/" + cardSet.get(imgNumber).getName() + ".jpg");
+                        compiledImage.createGraphics().drawImage(adjustImage(image), j * (3 + scaledWidth), i * (3 + scaledHeight), null);
+                    }
+                    catch (IOException e)
+                    {
+                        System.out.println("exception");
+                        //ignore
+                    }
+                    finally {
+                        imgCount ++;
+
+                        System.out.println("finally");
+                        while(imgNumber < cardSet.size() && cardSet.get(imgNumber).getOwned() + imgCount >= cardSet.get(imgNumber).getUsed())
+                        {
+                            imgNumber ++;
+                            imgCount = 0;
+                        }
+                    }
+                    if(imgCount >= cardSet.size())
+                    {
+                        break;
+                    }
+                }
+                if(imgCount >= cardSet.size())
+                {
+                    break;
+                }
+            }
+            ImageIO.write(compiledImage, "jpeg", new File("images/" + deckname + "/deck/page" + page + ".jpg"));
+
+        }
+    }
+
+
+
+    private final int scaledWidth = 200;
+    private final int scaledHeight = 280;
+    //final size is 200 width x 280 height
+    private BufferedImage adjustImage(File imageFile)
+            throws IOException {
+        // reads input image
+        BufferedImage image = ImageIO.read(imageFile);
+
+        // creates output image
+        BufferedImage outputImage = new BufferedImage(scaledWidth,
+                scaledHeight, image.getType());
+
+        // scales the input image to the output image
+        Graphics2D g2d = outputImage.createGraphics();
+        g2d.drawImage(image, 0, 0, scaledWidth, scaledHeight, null);
+        g2d.dispose();
+
+        return image;
+    }
 }
