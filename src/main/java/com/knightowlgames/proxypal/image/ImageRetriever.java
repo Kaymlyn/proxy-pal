@@ -201,7 +201,10 @@ public class ImageRetriever {
                     .replace("%2B", "+"));
             card.setOwned(0);
             card.setUsed(qty);
-            deckList.add(card);
+            if(!card.getName().matches("(Plains|Island|Swamp|Mountain|Forest)[+]+[0-9]*")) {
+                System.out.println(card.getName());
+                deckList.add(card);
+            }
         });
 
         imageStitcher(id.toString(), deckList, 3, 3);
@@ -283,9 +286,6 @@ public class ImageRetriever {
             }
         }
 
-        BufferedImage compiledImage = new BufferedImage((imagesWide * scaledWidth) + (3 * (imagesWide -1)),
-                (imagesTall * scaledHeight) + (3 * (imagesTall - 1)),
-                BufferedImage.TYPE_INT_RGB);
         int imgCount = 0;
         int imgNumber = 0;
         int page = 1;
@@ -294,67 +294,113 @@ public class ImageRetriever {
             imgNumber ++;
         }
 
-        while(imgCount < cardSet.size())
+        while(imgNumber < cardSet.size())
         {
+            BufferedImage compiledImage = new BufferedImage((imagesWide * scaledWidth) + (3 * (imagesWide -1)),
+                    (imagesTall * scaledHeight) + (3 * (imagesTall - 1)),
+                    BufferedImage.TYPE_INT_RGB);
+            Graphics2D g2d = compiledImage.createGraphics();
+            g2d.setBackground(Color.WHITE);
+            g2d.clearRect(0, 0, compiledImage.getWidth(), compiledImage.getHeight());
             for (int i = 0; i < imagesTall; i++)
             {
                 for (int j = 0; j < imagesWide; j++)
                 {
-
+                    if(imgNumber >= cardSet.size())
+                    {
+                        break;
+                    }
                     try {
-                        System.out.println("images/" + deckname + "/" + cardSet.get(imgNumber).getName() + ".jpg");
                         File image = new File("images/" + deckname + "/" + cardSet.get(imgNumber).getName() + ".jpg");
                         compiledImage.createGraphics().drawImage(adjustImage(image), j * (3 + scaledWidth), i * (3 + scaledHeight), null);
                     }
                     catch (IOException e)
                     {
-                        System.out.println("exception");
                         //ignore
                     }
                     finally {
                         imgCount ++;
-
-                        System.out.println("finally");
                         while(imgNumber < cardSet.size() && cardSet.get(imgNumber).getOwned() + imgCount >= cardSet.get(imgNumber).getUsed())
                         {
                             imgNumber ++;
                             imgCount = 0;
                         }
                     }
-                    if(imgCount >= cardSet.size())
+                    if(imgNumber >= cardSet.size())
                     {
                         break;
                     }
                 }
-                if(imgCount >= cardSet.size())
+                if(imgNumber >= cardSet.size())
                 {
                     break;
                 }
             }
-            ImageIO.write(compiledImage, "jpeg", new File("images/" + deckname + "/deck/page" + page + ".jpg"));
+            ImageIO.write(compiledImage, "png", new File("images/" + deckname + "/deck/page" + page + ".png"));
+            page ++;
 
         }
     }
 
-
+    private BufferedImage adjustImage(File imageFile)
+            throws IOException {
+        return adjustImage(imageFile, true, false);
+    }
 
     private final int scaledWidth = 200;
     private final int scaledHeight = 280;
     //final size is 200 width x 280 height
-    private BufferedImage adjustImage(File imageFile)
+    private BufferedImage adjustImage(File imageFile, boolean grayscale, boolean desaturate)
             throws IOException {
-        // reads input image
+
         BufferedImage image = ImageIO.read(imageFile);
+        Image scaledImage = image.getScaledInstance(scaledWidth, scaledHeight, Image.SCALE_SMOOTH);
+        BufferedImage finalImage = new BufferedImage(scaledWidth, scaledHeight, BufferedImage.TYPE_INT_RGB);
+        Graphics2D bGr = finalImage.createGraphics();
+        bGr.drawImage(scaledImage, 0, 0, null);
+        bGr.dispose();
+        if(grayscale)
+        {
+            finalImage = grayscale(finalImage);
+        }
 
-        // creates output image
-        BufferedImage outputImage = new BufferedImage(scaledWidth,
-                scaledHeight, image.getType());
+        return finalImage;
+    }
 
-        // scales the input image to the output image
-        Graphics2D g2d = outputImage.createGraphics();
-        g2d.drawImage(image, 0, 0, scaledWidth, scaledHeight, null);
-        g2d.dispose();
+    //from www.dyclassroom.com/image-processing-project/how-to-convert-a-color-image-into-grayscale-image-in-java
+    private BufferedImage grayscale(BufferedImage image)
+    {
+        //get image width and height
+        int width = image.getWidth();
+        int height = image.getHeight();
 
+        //convert to grayscale
+        for(int y = 0; y < height; y++){
+            for(int x = 0; x < width; x++){
+                int p = image.getRGB(x,y);
+
+                int a = (p>>24)&0xff;
+                int r = (p>>16)&0xff;
+                int g = (p>>8)&0xff;
+                int b = p&0xff;
+
+                //calculate average
+                int avg = (r+g+b)/3;
+
+//                if(avg < 48)
+//                {
+//                    avg = 0;
+//                }
+//                else if(avg > 207)
+//                {
+//                    avg = 255;
+//                }
+                //replace RGB value with avg
+                p = (a<<24) | (avg<<16) | (avg<<8) | avg;
+
+                image.setRGB(x, y, p);
+            }
+        }
         return image;
     }
 }
