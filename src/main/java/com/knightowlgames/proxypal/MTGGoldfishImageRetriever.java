@@ -1,7 +1,8 @@
-package com.knightowlgames.proxypal.image;
+package com.knightowlgames.proxypal;
 
 import com.knightowlgames.proxypal.HttpManager;
 import com.knightowlgames.proxypal.datatype.MagicCard;
+import com.knightowlgames.proxypal.image.ImageManipulator;
 import com.squareup.okhttp.OkHttpClient;
 import com.squareup.okhttp.Request;
 import com.squareup.okhttp.Response;
@@ -245,89 +246,18 @@ public class MTGGoldfishImageRetriever {
 
         List<BufferedImage> images = manipulator.imageStitcher(deckImages, acrossQty, downQty, grayscale, contrast);
 
-        PDDocument document = new PDDocument();
-        images.forEach(image -> {
-            PDPage page = new PDPage(new PDRectangle(image.getWidth(), image.getHeight()));
-            try {
-                PDImageXObject imageObject = LosslessFactory.createFromImage(document, image);
-
-                PDPageContentStream contentStream = new PDPageContentStream(document, page);
-                contentStream.drawImage(imageObject, 0, 0);
-                contentStream.close();
-            }
-            catch (IOException e) {
-                //ignore
-            }
-            document.addPage(page);
-        });
-
-        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-        document.save(byteArrayOutputStream);
-        document.close();
+        byte[] pdf = manipulator.pdfMaker(images);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.parseMediaType("application/pdf"));
         String filename = id.toString() + ".pdf";
         headers.setContentDispositionFormData(filename, filename);
         headers.setCacheControl("must-revalidate, post-check=0, pre-check=0");
-        return new ResponseEntity<>(byteArrayOutputStream.toByteArray(), headers ,HttpStatus.OK);
+        return new ResponseEntity<>(pdf, headers ,HttpStatus.OK);
     }
 
     private BufferedImage downloadImageFromLink(String link) throws IOException
     {
         return ImageIO.read(new URL(link));
-    }
-
-    private void downloadImageFromLink(String link, String deckName) throws IOException
-    {
-        OkHttpClient client = HttpManager.getHttpClient();
-        String cardName = link.substring(link.indexOf("gf/") + 3, link.indexOf("%2B%255B"))
-                .replace("%2B%252F%252F%2B", "--")
-                .replace("%2527", "'")
-                .replace("%252C", ",")
-                .replace("%253E", "")
-                .replace("%253C", "")
-                .replace("%2B", "+") + ".jpg";
-
-        Request request = new Request.Builder()
-                .url(link)
-                .get()
-                .build();
-        Response response = client.newCall(request).execute();
-        Path path = Paths.get("images/" + deckName + "/");
-
-        if (!Files.exists(path)) {
-            try {
-                Files.createDirectories(path);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-        String imgPath = "images/" + deckName + "/" + cardName;
-        try {
-            if(Files.exists(Paths.get(imgPath)))
-            {
-                System.out.println("File Exists: " + cardName);
-            }
-            else {
-                System.out.println(Paths.get(imgPath).toAbsolutePath());
-                Files.copy(response.body().byteStream(), Paths.get(imgPath).toAbsolutePath());
-            }
-        }
-        catch (FileAlreadyExistsException e)
-        {
-            System.out.println("File Exists: " + cardName.replace(" ", "+") + ".jpg");
-        }
-        catch (SocketTimeoutException e)
-        {
-            if(Files.exists(Paths.get(imgPath)))
-            {
-                Files.delete(Paths.get(imgPath));
-
-            }
-        }
-        finally {
-            response.body().close();
-        }
     }
 }
