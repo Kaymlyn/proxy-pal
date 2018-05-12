@@ -1,20 +1,29 @@
 package com.knightowlgames.proxypal;
 
-import com.knightowlgames.proxypal.HttpManager;
 import com.knightowlgames.proxypal.datatype.MagicCard;
 import com.knightowlgames.proxypal.image.ImageManipulator;
 import com.squareup.okhttp.OkHttpClient;
 import com.squareup.okhttp.Request;
 import com.squareup.okhttp.Response;
-import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.pdmodel.PDPage;
-import org.apache.pdfbox.pdmodel.PDPageContentStream;
-import org.apache.pdfbox.pdmodel.common.PDRectangle;
-import org.apache.pdfbox.pdmodel.graphics.image.LosslessFactory;
-import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
+import java.awt.image.BufferedImage;
+import java.io.IOException;
+import java.net.SocketTimeoutException;
+import java.net.URL;
+import java.nio.file.FileAlreadyExistsException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+import javax.imageio.ImageIO;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.select.Elements;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -25,25 +34,16 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 
-import javax.imageio.ImageIO;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import java.awt.image.BufferedImage;
-import java.io.*;
-import java.net.SocketTimeoutException;
-import java.net.URL;
-import java.nio.file.FileAlreadyExistsException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.*;
-import java.util.stream.Collectors;
-
 @Controller
 @RequestMapping("/mtggoldfish/")
 public class MTGGoldfishImageRetriever {
 
-    ImageManipulator manipulator = new ImageManipulator();
+    private ImageManipulator manipulator;
+
+    @Autowired
+    public MTGGoldfishImageRetriever(ImageManipulator manipulator) {
+        this.manipulator = manipulator;
+    }
 
     @RequestMapping(value = "/getImageFile/{cardName}/{setId}", method = RequestMethod.GET)
     public ResponseEntity<String> getImage(@PathVariable("cardName") String cardName,
@@ -187,7 +187,7 @@ public class MTGGoldfishImageRetriever {
         System.out.println("https://www.mtggoldfish.com/deck/" + id + "#paper");
         Document doc = Jsoup.connect("https://www.mtggoldfish.com/deck/" + id + "#paper").get();
 
-        Map<MagicCard, BufferedImage> deckImages = new HashMap<>();
+        Map<MagicCard, BufferedImage> deckImages = new LinkedHashMap<>();
 
         Elements rows = doc.select("#tab-paper .deck-view-deck-table tbody tr");
         rows.forEach(tr -> {
