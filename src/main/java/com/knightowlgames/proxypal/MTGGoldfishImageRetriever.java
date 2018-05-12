@@ -24,6 +24,7 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.select.Elements;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -40,9 +41,12 @@ public class MTGGoldfishImageRetriever {
 
     private ImageManipulator manipulator;
 
+    private Float cardWidth = 223f;
+
     @Autowired
     public MTGGoldfishImageRetriever(ImageManipulator manipulator) {
         this.manipulator = manipulator;
+        this.manipulator.setCardWidth(cardWidth);
     }
 
     @RequestMapping(value = "/getImageFile/{cardName}/{setId}", method = RequestMethod.GET)

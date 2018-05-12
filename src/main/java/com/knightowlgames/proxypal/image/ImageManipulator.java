@@ -3,7 +3,6 @@ package com.knightowlgames.proxypal.image;
 import com.knightowlgames.proxypal.datatype.MagicCard;
 import java.awt.Color;
 import java.awt.Graphics2D;
-import java.awt.Image;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -22,24 +21,38 @@ import org.springframework.stereotype.Service;
 @Service
 public class ImageManipulator {
 
-    private final int scaledWidth = 200;
-    private final int scaledHeight = 280;
+    private int margin = 5;
+    private float cardScaleFactor;
+    private float finalWidth = 180f;
+
+    public ImageManipulator()
+    {
+        cardScaleFactor = 1;
+    }
+
+    public void setCardWidth(Float cardWidth)
+    {
+        cardScaleFactor = finalWidth/cardWidth;
+    }
 
     public byte[] pdfMaker(List<BufferedImage> images)
     {
         PDDocument document = new PDDocument();
+
         images.forEach(image -> {
-            PDPage page = new PDPage(new PDRectangle(image.getWidth(), image.getHeight()));
+            PDPage page = new PDPage(new PDRectangle((cardScaleFactor)*image.getWidth(), (cardScaleFactor)*image.getHeight()));
+
             try {
                 PDImageXObject imageObject = LosslessFactory.createFromImage(document, image);
 
                 PDPageContentStream contentStream = new PDPageContentStream(document, page);
-                contentStream.drawImage(imageObject, 0, 0);
+                contentStream.drawImage(imageObject, 0, 0,(cardScaleFactor)*image.getWidth(), (cardScaleFactor)*image.getHeight());
                 contentStream.close();
             }
             catch (IOException e) {
                 //ignore
             }
+
             document.addPage(page);
         });
 
@@ -75,11 +88,13 @@ public class ImageManipulator {
         {
             imgNumber ++;
         }
+        int imageWidth = cardImage.get(cardSet.get(0)).getWidth();
+        int imageHeight = cardImage.get(cardSet.get(0)).getHeight();
 
         while(imgNumber < cardSet.size())
         {
-            BufferedImage compiledImage = new BufferedImage((imagesWide * scaledWidth) + (3 * (imagesWide -1)),
-                    (imagesTall * scaledHeight) + (3 * (imagesTall - 1)),
+            BufferedImage compiledImage = new BufferedImage((imagesWide * imageWidth) + (margin * (imagesWide -1)),
+                    (imagesTall * imageHeight) + (margin * (imagesTall - 1)),
                     BufferedImage.TYPE_INT_RGB);
             Graphics2D g2d = compiledImage.createGraphics();
             g2d.setBackground(Color.WHITE);
@@ -94,7 +109,7 @@ public class ImageManipulator {
                     }
 
                     BufferedImage card = cardImage.get(cardSet.get(imgNumber));
-                    compiledImage.createGraphics().drawImage(adjustImage(card, grayscale, contrast), j * (3 + scaledWidth), i * (3 + scaledHeight), null);
+                    compiledImage.createGraphics().drawImage(adjustImage(card, grayscale, contrast), j * (margin + imageWidth), i * (margin + imageHeight), null);
 
                     imgCount ++;
                     while(imgNumber < cardSet.size() && cardSet.get(imgNumber).getOwned() + imgCount >= cardSet.get(imgNumber).getUsed())
@@ -121,16 +136,15 @@ public class ImageManipulator {
 
     private BufferedImage adjustImage(BufferedImage image, boolean grayscale, boolean contrast) {
 
-        Image scaledImage = image.getScaledInstance(scaledWidth, scaledHeight, Image.SCALE_SMOOTH);
-        BufferedImage finalImage = new BufferedImage(scaledWidth, scaledHeight, BufferedImage.TYPE_INT_RGB);
+        BufferedImage finalImage = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_RGB);
         Graphics2D bGr = finalImage.createGraphics();
-        bGr.drawImage(scaledImage, 0, 0, null);
+        bGr.drawImage(image, 0, 0, null);
         bGr.dispose();
 
         if(grayscale)
         {
-            for(int y = 0; y < scaledHeight; y++) {
-                for (int x = 0; x < scaledWidth; x++) {
+            for(int y = 0; y < finalImage.getHeight(); y++) {
+                for (int x = 0; x < finalImage.getWidth(); x++) {
                     int p = finalImage.getRGB(x, y);
 
                     int a = (p >> 24) & 0xff;
