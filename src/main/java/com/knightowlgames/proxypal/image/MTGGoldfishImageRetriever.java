@@ -5,34 +5,46 @@ import com.knightowlgames.proxypal.datatype.MagicCard;
 import com.squareup.okhttp.OkHttpClient;
 import com.squareup.okhttp.Request;
 import com.squareup.okhttp.Response;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.pdmodel.graphics.image.LosslessFactory;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.select.Elements;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
 
 import javax.imageio.ImageIO;
-import java.awt.*;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 import java.awt.image.BufferedImage;
-import java.io.File;
-import java.io.IOException;
+import java.io.*;
 import java.net.SocketTimeoutException;
+import java.net.URL;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
-import java.util.List;
 import java.util.stream.Collectors;
 
 @Controller
-public class ImageRetriever {
+@RequestMapping("/mtggoldfish/")
+public class MTGGoldfishImageRetriever {
 
-    @RequestMapping(value = "/getImage/{cardName}/{setId}", method = RequestMethod.GET)
+    ImageManipulator manipulator = new ImageManipulator();
+
+    @RequestMapping(value = "/getImageFile/{cardName}/{setId}", method = RequestMethod.GET)
     public ResponseEntity<String> getImage(@PathVariable("cardName") String cardName,
                                            @PathVariable("setId") String setId) throws IOException
     {
@@ -40,7 +52,7 @@ public class ImageRetriever {
         return new ResponseEntity<>("<a href='./images/" + setId.toUpperCase() + "/" + cardName + ".jpg'>" + cardName + "</a>", HttpStatus.OK);
     }
 
-    @RequestMapping(value = "/getImages/{setName}/{setId}", method = RequestMethod.GET)
+    @RequestMapping(value = "/getImageFiles/{setName}/{setId}", method = RequestMethod.GET)
     public ResponseEntity<String> getBulkImages(@PathVariable("setName") String setName,
                                                 @PathVariable("setId") String setId)
     {
@@ -163,52 +175,107 @@ public class ImageRetriever {
     }
 
     @RequestMapping("/getDeck/{id}")
-    public ResponseEntity<String> getNetDeck(@PathVariable("id") Integer id) throws IOException
+    public ResponseEntity<byte[]> getNetDeckNoFiles(@PathVariable("id") Integer id,
+                                                    @RequestParam(value = "grayscale", required = false, defaultValue = "false") Boolean grayscale,
+                                                    @RequestParam(value = "highContrast", required = false, defaultValue = "false") Boolean contrast,
+                                                    @RequestParam(value = "acrossQty", required = false, defaultValue = "3") Integer acrossQty,
+                                                    @RequestParam(value = "downQty", required = false, defaultValue = "3") Integer downQty,
+                                                    @RequestParam(value = "withLands", required = false, defaultValue = "false") Boolean withLands
+    ) throws IOException
     {
         System.out.println("https://www.mtggoldfish.com/deck/" + id + "#paper");
         Document doc = Jsoup.connect("https://www.mtggoldfish.com/deck/" + id + "#paper").get();
 
+        Map<MagicCard, BufferedImage> deckImages = new HashMap<>();
+
         Elements rows = doc.select("#tab-paper .deck-view-deck-table tbody tr");
-        Map<String, Integer> deckInfo = new HashMap<>();
         rows.forEach(tr -> {
-                if(!tr.select("td").hasClass("deck-header")) {
-                    Integer qty = Integer.parseInt(tr.select(".deck-col-qty").text());
-                    deckInfo.put(tr.select(".deck-col-card a").attr("data-full-image"), qty);
-                    if (tr.select(".deck-col-card a").hasAttr("data-full-image1")) {
-                        deckInfo.put(tr.select(".deck-col-card a").attr("data-full-image1"), qty);
+            if(!tr.select("td").hasClass("deck-header")) {
+                MagicCard card = new MagicCard();
+                Integer qty = Integer.parseInt(tr.select(".deck-col-qty").text());
+                String cardLink = tr.select(".deck-col-card a").attr("data-full-image");
+                String cardName = cardLink.substring(cardLink.indexOf("gf/") + 3, cardLink.indexOf("%2B%255B"))
+                        .replace("%2B%252F%252F%2B", "--")
+                        .replace("%2527", "'")
+                        .replace("%252C", ",")
+                        .replace("%253E", "")
+                        .replace("%253C", "")
+                        .replace("%2B", " ");
+                card.setName(cardName);
+                card.setUsed(qty);
+                card.setOwned(0);
+                System.out.println("getting card: " + card.getName());
+                try
+                {
+                    if(withLands || !card.getName().matches("(Plains|Island|Swamp|Mountain|Forest) [0-9]*"))
+                    {
+                        deckImages.put(card, downloadImageFromLink(cardLink));
                     }
                 }
-            });
-        deckInfo.forEach((link, qty) -> {
+                catch (IOException e)
+                {
+                    //ignore
+                }
+
+                if (tr.select(".deck-col-card a").hasAttr("data-full-image1")) {
+                    card = new MagicCard();
+                    cardLink = tr.select(".deck-col-card a").attr("data-full-image1");
+                    cardName = cardLink.substring(cardLink.indexOf("gf/") + 3, cardLink.indexOf("%2B%255B"))
+                            .replace("%2B%252F%252F%2B", "--")
+                            .replace("%2527", "'")
+                            .replace("%252C", ",")
+                            .replace("%253E", "")
+                            .replace("%253C", "")
+                            .replace("%2B", " ");
+                    card.setName(cardName);
+                    card.setUsed(qty);
+                    card.setOwned(0);
+                    System.out.println("getting card: " + card.getName());
+                    try
+                    {
+                        deckImages.put(card, downloadImageFromLink(cardLink));
+                    }
+                    catch (IOException e)
+                    {
+                        //ignore
+                    }
+                }
+            }
+        });
+
+        List<BufferedImage> images = manipulator.imageStitcher(deckImages, acrossQty, downQty, grayscale, contrast);
+
+        PDDocument document = new PDDocument();
+        images.forEach(image -> {
+            PDPage page = new PDPage(new PDRectangle(image.getWidth(), image.getHeight()));
             try {
-                downloadImageFromLink(link, id.toString());
+                PDImageXObject imageObject = LosslessFactory.createFromImage(document, image);
+
+                PDPageContentStream contentStream = new PDPageContentStream(document, page);
+                contentStream.drawImage(imageObject, 0, 0);
+                contentStream.close();
             }
             catch (IOException e) {
-                System.out.println("IOException for: " + link);
-                e.printStackTrace();
+                //ignore
             }
+            document.addPage(page);
         });
 
-        List<MagicCard> deckList = new ArrayList<>();
-        deckInfo.forEach((name, qty) -> {
-            MagicCard card = new MagicCard();
-            card.setName(name.substring(name.indexOf("gf/") + 3, name.indexOf("%2B%255B"))
-                    .replace("%2B%252F%252F%2B", "--")
-                    .replace("%2527", "'")
-                    .replace("%252C", ",")
-                    .replace("%253E", "")
-                    .replace("%253C", "")
-                    .replace("%2B", "+"));
-            card.setOwned(0);
-            card.setUsed(qty);
-            if(!card.getName().matches("(Plains|Island|Swamp|Mountain|Forest)[+]+[0-9]*")) {
-                System.out.println(card.getName());
-                deckList.add(card);
-            }
-        });
+        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+        document.save(byteArrayOutputStream);
+        document.close();
 
-        imageStitcher(id.toString(), deckList, 3, 3);
-        return new ResponseEntity<>(deckInfo.toString(),HttpStatus.OK);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType("application/pdf"));
+        String filename = id.toString() + ".pdf";
+        headers.setContentDispositionFormData(filename, filename);
+        headers.setCacheControl("must-revalidate, post-check=0, pre-check=0");
+        return new ResponseEntity<>(byteArrayOutputStream.toByteArray(), headers ,HttpStatus.OK);
+    }
+
+    private BufferedImage downloadImageFromLink(String link) throws IOException
+    {
+        return ImageIO.read(new URL(link));
     }
 
     private void downloadImageFromLink(String link, String deckName) throws IOException
@@ -262,145 +329,5 @@ public class ImageRetriever {
         finally {
             response.body().close();
         }
-    }
-
-    private void imageStitcher(String deckname, List<MagicCard> cardSet, int imagesWide, int imagesTall) throws IOException
-    {
-        if(imagesWide < 1 || imagesTall < 1)
-        {
-            return;
-        }
-        File deckFolder = new File("images/" + deckname + "/deck/");
-        String[]entries = deckFolder.list();
-        if(entries != null) {
-            for (String entry : entries) {
-                File currentFile = new File(deckFolder.getPath(), entry);
-                currentFile.delete();
-            }
-        }
-        if (!Files.exists(deckFolder.toPath())) {
-            try {
-                Files.createDirectories(deckFolder.toPath());
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-
-        int imgCount = 0;
-        int imgNumber = 0;
-        int page = 1;
-        while(cardSet.get(imgNumber).getOwned() >= cardSet.get(imgNumber).getUsed() && imgNumber < cardSet.size())
-        {
-            imgNumber ++;
-        }
-
-        while(imgNumber < cardSet.size())
-        {
-            BufferedImage compiledImage = new BufferedImage((imagesWide * scaledWidth) + (3 * (imagesWide -1)),
-                    (imagesTall * scaledHeight) + (3 * (imagesTall - 1)),
-                    BufferedImage.TYPE_INT_RGB);
-            Graphics2D g2d = compiledImage.createGraphics();
-            g2d.setBackground(Color.WHITE);
-            g2d.clearRect(0, 0, compiledImage.getWidth(), compiledImage.getHeight());
-            for (int i = 0; i < imagesTall; i++)
-            {
-                for (int j = 0; j < imagesWide; j++)
-                {
-                    if(imgNumber >= cardSet.size())
-                    {
-                        break;
-                    }
-                    try {
-                        File image = new File("images/" + deckname + "/" + cardSet.get(imgNumber).getName() + ".jpg");
-                        compiledImage.createGraphics().drawImage(adjustImage(image), j * (3 + scaledWidth), i * (3 + scaledHeight), null);
-                    }
-                    catch (IOException e)
-                    {
-                        //ignore
-                    }
-                    finally {
-                        imgCount ++;
-                        while(imgNumber < cardSet.size() && cardSet.get(imgNumber).getOwned() + imgCount >= cardSet.get(imgNumber).getUsed())
-                        {
-                            imgNumber ++;
-                            imgCount = 0;
-                        }
-                    }
-                    if(imgNumber >= cardSet.size())
-                    {
-                        break;
-                    }
-                }
-                if(imgNumber >= cardSet.size())
-                {
-                    break;
-                }
-            }
-            ImageIO.write(compiledImage, "png", new File("images/" + deckname + "/deck/page" + page + ".png"));
-            page ++;
-
-        }
-    }
-
-    private BufferedImage adjustImage(File imageFile)
-            throws IOException {
-        return adjustImage(imageFile, true, false);
-    }
-
-    private final int scaledWidth = 200;
-    private final int scaledHeight = 280;
-    //final size is 200 width x 280 height
-    private BufferedImage adjustImage(File imageFile, boolean grayscale, boolean desaturate)
-            throws IOException {
-
-        BufferedImage image = ImageIO.read(imageFile);
-        Image scaledImage = image.getScaledInstance(scaledWidth, scaledHeight, Image.SCALE_SMOOTH);
-        BufferedImage finalImage = new BufferedImage(scaledWidth, scaledHeight, BufferedImage.TYPE_INT_RGB);
-        Graphics2D bGr = finalImage.createGraphics();
-        bGr.drawImage(scaledImage, 0, 0, null);
-        bGr.dispose();
-        if(grayscale)
-        {
-            finalImage = grayscale(finalImage);
-        }
-
-        return finalImage;
-    }
-
-    //from www.dyclassroom.com/image-processing-project/how-to-convert-a-color-image-into-grayscale-image-in-java
-    private BufferedImage grayscale(BufferedImage image)
-    {
-        //get image width and height
-        int width = image.getWidth();
-        int height = image.getHeight();
-
-        //convert to grayscale
-        for(int y = 0; y < height; y++){
-            for(int x = 0; x < width; x++){
-                int p = image.getRGB(x,y);
-
-                int a = (p>>24)&0xff;
-                int r = (p>>16)&0xff;
-                int g = (p>>8)&0xff;
-                int b = p&0xff;
-
-                //calculate average
-                int avg = (r+g+b)/3;
-
-//                if(avg < 48)
-//                {
-//                    avg = 0;
-//                }
-//                else if(avg > 207)
-//                {
-//                    avg = 255;
-//                }
-                //replace RGB value with avg
-                p = (a<<24) | (avg<<16) | (avg<<8) | avg;
-
-                image.setRGB(x, y, p);
-            }
-        }
-        return image;
     }
 }
