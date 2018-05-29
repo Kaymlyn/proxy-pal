@@ -84,7 +84,7 @@ public class ImageManipulator {
         int imgCount = 0;
         int imgNumber = 0;
         List<MagicCard> cardSet = Arrays.asList(cardImage.keySet().toArray(new MagicCard[0]));
-        while(cardSet.get(imgNumber).getOwned() >= cardSet.get(imgNumber).getUsed() && imgNumber < cardSet.size())
+        while(imgNumber < cardSet.size() && cardSet.get(imgNumber).getOwned() >= cardSet.get(imgNumber).getUsed())
         {
             imgNumber ++;
         }
