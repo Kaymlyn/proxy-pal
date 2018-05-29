@@ -48,6 +48,7 @@ public class MTGGoldfishImageRetriever {
     public MTGGoldfishImageRetriever(ImageManipulator manipulator) {
         this.manipulator = manipulator;
         this.manipulator.setCardWidth(cardWidth);
+        this.manipulator.setMargin(2);
     }
 
     @RequestMapping(value = "/getImageFile/{cardName}/{setId}", method = RequestMethod.GET)
@@ -131,6 +132,7 @@ public class MTGGoldfishImageRetriever {
         Map<MagicCard, BufferedImage> deckImages = new LinkedHashMap<>();
 
         boolean atSideboard = false;
+        String deckName = doc.select("h2.deck-view-title").text().replace(" ","+").replace("\"", "").trim();
         Elements rows = doc.select("#tab-paper .deck-view-deck-table tbody tr");
         for(Element row : rows)
         {
@@ -185,7 +187,7 @@ public class MTGGoldfishImageRetriever {
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.parseMediaType("application/pdf"));
-        String filename = id.toString() + ".pdf";
+        String filename = deckName + "-" + id.toString() + ".pdf";
         headers.setContentDispositionFormData(filename, filename);
         headers.setCacheControl("must-revalidate, post-check=0, pre-check=0");
         return new ResponseEntity<>(pdf, headers, HttpStatus.OK);

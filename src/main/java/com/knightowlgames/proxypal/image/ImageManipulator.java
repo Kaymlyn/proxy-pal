@@ -21,18 +21,23 @@ import org.springframework.stereotype.Service;
 @Service
 public class ImageManipulator {
 
-    private int margin = 5;
+    private int margin;
     private float cardScaleFactor;
     private float finalWidth = 180f;
 
     public ImageManipulator()
     {
         cardScaleFactor = 1;
+        margin = 5;
     }
 
     public void setCardWidth(Float cardWidth)
     {
         cardScaleFactor = finalWidth/cardWidth;
+    }
+
+    public void setMargin(int margin) {
+        this.margin = margin;
     }
 
     public byte[] pdfMaker(List<BufferedImage> images)
