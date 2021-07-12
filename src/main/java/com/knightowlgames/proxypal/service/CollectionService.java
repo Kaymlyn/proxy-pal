@@ -8,11 +8,11 @@ import org.springframework.stereotype.Service;
 @Service
 public class CollectionService {
 
-    @Autowired
-    private CollectionRepository collectionRepository;
+	@Autowired
+	private CollectionRepository collectionRepository;
 
-    public MagicCard saveCard(MagicCard magicCard)
-    {
-        return null;
-    }
+	public MagicCard saveCard(MagicCard magicCard)
+			{
+				return null;
+			}
 }
