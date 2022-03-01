@@ -12,7 +12,7 @@ public class CollectionService {
 	private CollectionRepository collectionRepository;
 
 	public MagicCard saveCard(MagicCard magicCard)
-			{
-				return null;
-			}
+	{
+		return null;
+	}
 }

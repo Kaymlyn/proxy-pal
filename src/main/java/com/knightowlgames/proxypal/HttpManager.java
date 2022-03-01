@@ -16,39 +16,39 @@ public final class HttpManager
 	private static volatile OkHttpClient client;
 
 	private HttpManager()
-			{
-			}
+	{
+	}
 
 	public static OkHttpClient getHttpClient()
+	{
+		if (client == null)
+		{
+			synchronized (HttpManager.myLock)
 			{
 				if (client == null)
-					{
-						synchronized (HttpManager.myLock)
-								{
-									if (client == null)
-										{
+				{
 
-											client = new OkHttpClient();
+					client = new OkHttpClient();
 
-											client.setConnectTimeout(500, TimeUnit.MILLISECONDS);
-											client.setReadTimeout(1000, TimeUnit.MILLISECONDS);
-											client.setWriteTimeout(10, TimeUnit.SECONDS);
-										}
-								}
-					}
-				return client;
+					client.setConnectTimeout(500, TimeUnit.MILLISECONDS);
+					client.setReadTimeout(1000, TimeUnit.MILLISECONDS);
+					client.setWriteTimeout(10, TimeUnit.SECONDS);
+				}
 			}
+		}
+		return client;
+	}
 
 	static public boolean isWorking(boolean stats)
-			{
-				int queued = client.getDispatcher().getQueuedCallCount();
-				int running = client.getDispatcher().getRunningCallCount();
+	{
+		int queued = client.getDispatcher().getQueuedCallCount();
+		int running = client.getDispatcher().getRunningCallCount();
 
-				if (stats)
-					{
-						LOG.info("Queued: " + queued + " | Running: " + running);
-					}
+		if (stats)
+		{
+			LOG.info("Queued: " + queued + " | Running: " + running);
+		}
 
-				return (queued > 0 || running > 0);
-			}
+		return (queued > 0 || running > 0);
+	}
 }
